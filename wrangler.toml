@@ -1,0 +1,11 @@
+name = "linear-agents"
+main = "src/index.ts"
+compatibility_date = "2025-04-01"
+
+[[kv_namespaces]]
+binding = "OAUTH_TOKENS"
+id = "PLACEHOLDER_REPLACE_AFTER_KV_CREATE"
+
+[vars]
+GITHUB_REPO_OWNER = "stowe-io"
+GITHUB_REPO_NAME = "stowe-io"
