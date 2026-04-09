@@ -4,7 +4,8 @@ interface ManagedAgentResult {
 }
 
 const API_BASE = "https://api.anthropic.com/v1";
-const BETA_HEADER = "managed-agents-2026-04-01";
+const BETA_MANAGED = "managed-agents-2026-04-01";
+const BETA_STREAM = "agent-api-2026-03-01";
 
 async function apiRequest(
   apiKey: string,
@@ -15,7 +16,7 @@ async function apiRequest(
   const headers: Record<string, string> = {
     "x-api-key": apiKey,
     "anthropic-version": "2023-06-01",
-    "anthropic-beta": BETA_HEADER,
+    "anthropic-beta": BETA_MANAGED,
     "content-type": "application/json",
   };
   const res = await fetch(`${API_BASE}${path}`, {
@@ -94,7 +95,7 @@ async function streamSessionEvents(apiKey: string, sessionId: string): Promise<s
   const headers: Record<string, string> = {
     "x-api-key": apiKey,
     "anthropic-version": "2023-06-01",
-    "anthropic-beta": BETA_HEADER,
+    "anthropic-beta": BETA_STREAM,
     Accept: "text/event-stream",
   };
 
