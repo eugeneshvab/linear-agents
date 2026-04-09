@@ -59,11 +59,15 @@ export default {
 
     console.log(`[worker] Processing action: ${parsed.action}, sessionId: ${parsed.agentSessionId}, orgId: ${parsed.organizationId}`);
 
-    const accessToken = await env.OAUTH_TOKENS.get(parsed.organizationId);
+    // Look up per-agent token first, fall back to org-level token
+    const accessToken =
+      await env.OAUTH_TOKENS.get(`${parsed.organizationId}:${agentName}`) ??
+      await env.OAUTH_TOKENS.get(parsed.organizationId);
     if (!accessToken) {
-      console.error(`[worker] No OAuth token for org ${parsed.organizationId}`);
+      console.error(`[worker] No OAuth token for org ${parsed.organizationId}, agent ${agentName}`);
       return new Response("No access token for this organization", { status: 500 });
     }
+    console.log(`[worker] Using token for: ${await env.OAUTH_TOKENS.get(`${parsed.organizationId}:${agentName}`) ? `${agentName}` : "org-default"}`);
 
     const linearClient = createLinearClient(accessToken);
 
