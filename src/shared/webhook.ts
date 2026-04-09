@@ -57,7 +57,8 @@ export function parseWebhookPayload(payload: Record<string, unknown>): WebhookPa
     ""
   ) as string;
 
-  const action = (data.action ?? payload.action ?? "unknown") as string;
+  // Linear sends action at root level for webhooks
+  const action = (payload.action ?? data.action ?? "unknown") as string;
 
   const parsed: WebhookPayload = {
     action,

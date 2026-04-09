@@ -41,7 +41,7 @@ export default {
     console.log(`[worker] Webhook received for agent: ${agentName}`);
     const parsed = parseWebhookPayload(payload);
 
-    if (parsed.action !== "created" && parsed.action !== "prompted") {
+    if (parsed.action !== "create" && parsed.action !== "created" && parsed.action !== "prompted") {
       console.log(`[worker] Ignoring action: ${parsed.action}`);
       return new Response("OK", { status: 200 });
     }
