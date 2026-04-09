@@ -1,6 +1,6 @@
-import type { AgentContext } from "../types.js";
+import type { AgentContext, ProgressCallback } from "../types.js";
 import { runManagedAgent } from "../shared/managed-agent.js";
-import { postResponse, completeSession, postError } from "../shared/linear.js";
+import { postResponse, completeSession, postError, postThought } from "../shared/linear.js";
 
 export async function handleManagedAgent(
   ctx: AgentContext,
@@ -26,6 +26,11 @@ export async function handleManagedAgent(
     const taskMessage = taskParts.join("\n");
 
     const vaultIds = [env.LINEAR_VAULT_ID, env.GITHUB_VAULT_ID].filter(Boolean);
+
+    const onProgress: ProgressCallback = async (message: string) => {
+      await postThought(linearClient, agentSessionId, message);
+    };
+
     console.log(`[managed] Starting agent ${managedAgentId}, message length: ${taskMessage.length}`);
     const result = await runManagedAgent(
       env.ANTHROPIC_API_KEY,
@@ -34,6 +39,7 @@ export async function handleManagedAgent(
       taskMessage,
       env.GITHUB_TOKEN,
       vaultIds,
+      onProgress,
     );
 
     console.log(`[managed] Agent completed. Response length: ${result.text.length}, sessionId: ${result.sessionId}`);

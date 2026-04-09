@@ -1,7 +1,11 @@
+import type { ProgressCallback } from "../types.js";
+
 interface ManagedAgentResult {
   text: string;
   sessionId: string;
 }
+
+const PROGRESS_THROTTLE_MS = 10_000;
 
 const API_BASE = "https://api.anthropic.com/v1";
 const BETA_MANAGED = "managed-agents-2026-04-01";
@@ -39,6 +43,7 @@ export async function runManagedAgent(
   taskMessage: string,
   githubToken: string,
   vaultIds: string[],
+  onProgress?: ProgressCallback,
 ): Promise<ManagedAgentResult> {
   // 1. Create session
   const sessionBody: Record<string, unknown> = {
@@ -63,7 +68,7 @@ export async function runManagedAgent(
 
   // 3. Open the SSE stream FIRST (per docs: stream before sending message)
   console.log(`[anthropic] Opening SSE stream for session ${session.id}`);
-  const streamPromise = streamSessionEvents(apiKey, session.id);
+  const streamPromise = streamSessionEvents(apiKey, session.id, onProgress);
 
   // 4. Then send the user message — this triggers the agent to start working
   console.log(`[anthropic] Sending user message (${fullMessage.length} chars)`);
@@ -91,7 +96,7 @@ export async function runManagedAgent(
   return { text: resultText, sessionId: session.id };
 }
 
-async function streamSessionEvents(apiKey: string, sessionId: string): Promise<string> {
+async function streamSessionEvents(apiKey: string, sessionId: string, onProgress?: ProgressCallback): Promise<string> {
   const headers: Record<string, string> = {
     "x-api-key": apiKey,
     "anthropic-version": "2023-06-01",
@@ -112,6 +117,7 @@ async function streamSessionEvents(apiKey: string, sessionId: string): Promise<s
 
   let resultText = "";
   let sawAgentActivity = false;
+  let lastProgressTime = 0;
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -147,12 +153,30 @@ async function streamSessionEvents(apiKey: string, sessionId: string): Promise<s
               resultText += block.text;
             }
           }
+          if (onProgress) {
+            const now = Date.now();
+            if (now - lastProgressTime >= PROGRESS_THROTTLE_MS) {
+              lastProgressTime = now;
+              try { await onProgress("Agent is composing response..."); } catch (e) {
+                console.error(`[stream] Progress post failed:`, e);
+              }
+            }
+          }
         }
 
         // Track tool usage as activity
         if (event.type === "agent.tool_use") {
           sawAgentActivity = true;
           console.log(`[stream] Tool use: ${event.name}`);
+          if (onProgress) {
+            const now = Date.now();
+            if (now - lastProgressTime >= PROGRESS_THROTTLE_MS) {
+              lastProgressTime = now;
+              try { await onProgress(`Using tool: ${event.name}...`); } catch (e) {
+                console.error(`[stream] Progress post failed:`, e);
+              }
+            }
+          }
         }
 
         // Mark activity on any agent-related event

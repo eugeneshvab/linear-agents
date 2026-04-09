@@ -43,6 +43,19 @@ export async function acknowledgeSession(client: LinearClient, agentSessionId: s
   console.log(`[linear] Acknowledged`);
 }
 
+export async function postThought(client: LinearClient, agentSessionId: string, body: string): Promise<void> {
+  await graphql(client, `
+    mutation PostThought($input: AgentActivityCreateInput!) {
+      agentActivityCreate(input: $input) { success }
+    }
+  `, {
+    input: {
+      agentSessionId,
+      content: { type: "thought", body },
+    },
+  });
+}
+
 export async function postResponse(client: LinearClient, agentSessionId: string, text: string): Promise<void> {
   console.log(`[linear] Posting response to session ${agentSessionId}, length: ${text.length}`);
   await graphql(client, `

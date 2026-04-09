@@ -38,14 +38,22 @@ export default {
 
     const body = await request.text();
 
-    // TODO: Re-enable signature verification after debugging
-    // Temporarily skip to diagnose webhook delivery
     const signature = request.headers.get("linear-signature");
     console.log(`[worker] Signature present: ${!!signature}, agent: ${agentName}`);
-    console.log(`[worker] Body preview: ${body.substring(0, 300)}`);
     if (signature) {
-      const valid = await verifySignature(body, signature, env.LINEAR_WEBHOOK_SECRET);
-      console.log(`[worker] Signature valid: ${valid}`);
+      const webhookSecret =
+        await env.OAUTH_TOKENS.get(`webhook_secret:${agentName}`) ??
+        env.LINEAR_WEBHOOK_SECRET;
+      if (webhookSecret) {
+        const valid = await verifySignature(body, signature, webhookSecret);
+        if (!valid) {
+          console.error(`[worker] Signature verification failed for ${agentName}`);
+          return new Response("Invalid signature", { status: 401 });
+        }
+        console.log(`[worker] Signature verified for ${agentName}`);
+      } else {
+        console.warn(`[worker] No webhook secret configured for ${agentName}, skipping verification`);
+      }
     }
 
     const payload = JSON.parse(body);

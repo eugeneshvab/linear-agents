@@ -46,3 +46,5 @@ export interface AgentContext {
 export interface LinearClient {
   accessToken: string;
 }
+
+export type ProgressCallback = (message: string) => Promise<void>;
