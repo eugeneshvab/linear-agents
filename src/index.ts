@@ -38,24 +38,30 @@ export default {
     }
 
     const payload = JSON.parse(body);
+    console.log(`[worker] Webhook received for agent: ${agentName}`);
     const parsed = parseWebhookPayload(payload);
 
     if (parsed.action !== "created" && parsed.action !== "prompted") {
+      console.log(`[worker] Ignoring action: ${parsed.action}`);
       return new Response("OK", { status: 200 });
     }
 
+    console.log(`[worker] Processing action: ${parsed.action}, sessionId: ${parsed.agentSessionId}, orgId: ${parsed.organizationId}`);
+
     const accessToken = await env.OAUTH_TOKENS.get(parsed.organizationId);
     if (!accessToken) {
-      console.error(`No OAuth token for org ${parsed.organizationId}`);
+      console.error(`[worker] No OAuth token for org ${parsed.organizationId}`);
       return new Response("No access token for this organization", { status: 500 });
     }
 
     const linearClient = createLinearClient(accessToken);
 
-    // Acknowledge within Linear's 5-second deadline
+    console.log(`[worker] Acknowledging session ${parsed.agentSessionId}`);
     await acknowledgeSession(linearClient, parsed.agentSessionId);
+    console.log(`[worker] Acknowledged`);
 
     const managedAgentId = getAgentId(agentName, env);
+    console.log(`[worker] Dispatching to managed agent: ${managedAgentId}`);
 
     const agentCtx: AgentContext = {
       agentSessionId: parsed.agentSessionId,

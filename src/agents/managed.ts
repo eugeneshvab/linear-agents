@@ -26,6 +26,7 @@ export async function handleManagedAgent(
     const taskMessage = taskParts.join("\n");
 
     const vaultIds = [env.LINEAR_VAULT_ID, env.GITHUB_VAULT_ID].filter(Boolean);
+    console.log(`[managed] Starting agent ${managedAgentId}, message length: ${taskMessage.length}`);
     const result = await runManagedAgent(
       env.ANTHROPIC_API_KEY,
       managedAgentId,
@@ -35,10 +36,14 @@ export async function handleManagedAgent(
       vaultIds,
     );
 
+    console.log(`[managed] Agent completed. Response length: ${result.text.length}, sessionId: ${result.sessionId}`);
     await postResponse(linearClient, agentSessionId, result.text);
+    console.log(`[managed] Response posted to Linear`);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    console.error(`Agent failed for session ${agentSessionId}:`, message);
-    await postError(linearClient, agentSessionId, `Agent failed: ${message}`);
+    console.error(`[managed] Agent failed for session ${agentSessionId}:`, message);
+    await postError(linearClient, agentSessionId, `Agent failed: ${message}`).catch((e) =>
+      console.error(`[managed] Failed to post error to Linear:`, e),
+    );
   }
 }

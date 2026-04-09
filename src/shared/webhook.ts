@@ -32,16 +32,43 @@ export async function verifySignature(
 }
 
 export function parseWebhookPayload(payload: Record<string, unknown>): WebhookPayload {
-  const data = (payload.data ?? payload) as Record<string, unknown>;
-  const issue = (data.issue ?? {}) as Record<string, unknown>;
+  // Log the raw payload so we can see exactly what Linear sends
+  console.log("[webhook] Raw payload:", JSON.stringify(payload, null, 2));
 
-  return {
-    action: (data.action ?? payload.action ?? "unknown") as string,
-    organizationId: (data.organizationId ?? payload.organizationId ?? "") as string,
-    agentSessionId: (data.agentSessionId ?? "") as string,
+  const data = (payload.data ?? payload) as Record<string, unknown>;
+
+  // Linear may nest the session ID in different places
+  const agentSessionId = (
+    data.agentSessionId ??
+    data.id ??
+    (data.agentSession as Record<string, unknown> | undefined)?.id ??
+    payload.agentSessionId ??
+    payload.id ??
+    ""
+  ) as string;
+
+  // Issue may be nested under data or data.agentSession
+  const agentSession = (data.agentSession ?? {}) as Record<string, unknown>;
+  const issue = (data.issue ?? agentSession.issue ?? {}) as Record<string, unknown>;
+
+  const organizationId = (
+    data.organizationId ??
+    payload.organizationId ??
+    ""
+  ) as string;
+
+  const action = (data.action ?? payload.action ?? "unknown") as string;
+
+  const parsed: WebhookPayload = {
+    action,
+    organizationId,
+    agentSessionId,
     issueTitle: (issue.title ?? "") as string,
     issueDescription: (issue.description ?? null) as string | null,
-    commentBody: (data.commentBody ?? null) as string | null,
-    promptContext: (data.promptContext ?? null) as string | null,
+    commentBody: (data.commentBody ?? agentSession.commentBody ?? null) as string | null,
+    promptContext: (data.promptContext ?? agentSession.promptContext ?? null) as string | null,
   };
+
+  console.log("[webhook] Parsed:", JSON.stringify(parsed));
+  return parsed;
 }
