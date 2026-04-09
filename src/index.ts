@@ -41,9 +41,7 @@ export default {
     const signature = request.headers.get("linear-signature");
     console.log(`[worker] Signature present: ${!!signature}, agent: ${agentName}`);
     if (signature) {
-      const webhookSecret =
-        await env.OAUTH_TOKENS.get(`webhook_secret:${agentName}`) ??
-        env.LINEAR_WEBHOOK_SECRET;
+      const webhookSecret = await env.OAUTH_TOKENS.get(`webhook_secret:${agentName}`);
       if (webhookSecret) {
         const valid = await verifySignature(body, signature, webhookSecret);
         if (!valid) {
