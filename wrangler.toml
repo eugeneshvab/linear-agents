@@ -9,3 +9,13 @@ id = "4bb06ee7c76447f7b6c688a294500828"
 [vars]
 GITHUB_REPO_OWNER = "stowe-io"
 GITHUB_REPO_NAME = "stowe-io"
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
