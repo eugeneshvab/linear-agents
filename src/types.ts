@@ -1,25 +1,48 @@
-import type { LinearClient } from "@linear/sdk";
-
-export type AgentName = "planner" | "triager" | "compliance";
+export type AgentName = "planner" | "triager" | "reviewer" | "security" | "story-writer" | "implementer";
 
 export interface Env {
+  // Linear
   OAUTH_TOKENS: KVNamespace;
   LINEAR_WEBHOOK_SECRET: string;
-  LINEAR_CLIENT_SECRET: string;
-  CLAUDE_API_KEY: string;
+
+  // Anthropic Managed Agents
+  ANTHROPIC_API_KEY: string;
+  ANTHROPIC_ENVIRONMENT_ID: string;
+  PLANNER_AGENT_ID: string;
+  TRIAGER_AGENT_ID: string;
+  REVIEWER_AGENT_ID: string;
+  SECURITY_AGENT_ID: string;
+  STORY_WRITER_AGENT_ID: string;
+  IMPLEMENTER_AGENT_ID: string;
+
+  // Vault IDs for MCP OAuth (Linear + GitHub)
+  LINEAR_VAULT_ID: string;
+  GITHUB_VAULT_ID: string;
+
+  // GitHub (injected into agent via user message for git clone)
   GITHUB_TOKEN: string;
-  GITHUB_REPO_OWNER: string;
-  GITHUB_REPO_NAME: string;
+}
+
+export interface WebhookPayload {
+  action: string;
+  organizationId: string;
+  agentSessionId: string;
+  issueTitle: string;
+  issueDescription: string | null;
+  commentBody: string | null;
+  promptContext: string | null;
 }
 
 export interface AgentContext {
   agentSessionId: string;
-  promptContext: string;
+  promptContext: string | null;
   issueTitle: string;
-  issueDescription: string;
+  issueDescription: string | null;
   commentBody: string | null;
   linearClient: LinearClient;
   env: Env;
 }
 
-export type AgentHandler = (ctx: AgentContext) => Promise<void>;
+export interface LinearClient {
+  accessToken: string;
+}
