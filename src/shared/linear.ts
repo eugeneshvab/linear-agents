@@ -7,7 +7,7 @@ async function graphql(client: LinearClient, query: string, variables?: Record<s
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: client.accessToken,
+      Authorization: `Bearer ${client.accessToken}`,
     },
     body: JSON.stringify({ query, variables }),
   });
