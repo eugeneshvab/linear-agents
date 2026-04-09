@@ -60,7 +60,11 @@ export async function runManagedAgent(
     "Then cd into stowe-io and read AGENTS.md first.",
   ].join("\n");
 
-  // 3. Send user message — this transitions the session from idle to running
+  // 3. Open the SSE stream FIRST (per docs: stream before sending message)
+  console.log(`[anthropic] Opening SSE stream for session ${session.id}`);
+  const streamPromise = streamSessionEvents(apiKey, session.id);
+
+  // 4. Then send the user message — this triggers the agent to start working
   console.log(`[anthropic] Sending user message (${fullMessage.length} chars)`);
   await apiRequest(apiKey, `/sessions/${session.id}/events`, "POST", {
     events: [
@@ -70,13 +74,13 @@ export async function runManagedAgent(
       },
     ],
   });
-  console.log(`[anthropic] Message sent, starting stream`);
+  console.log(`[anthropic] Message sent, waiting for agent to finish`);
 
-  // 4. Poll for completion via SSE stream
-  const resultText = await streamSessionEvents(apiKey, session.id);
-  console.log(`[anthropic] Stream complete, result length: ${resultText.length}`);
+  // 5. Wait for the stream to complete
+  const resultText = await streamPromise;
+  console.log(`[anthropic] Agent finished, result length: ${resultText.length}`);
 
-  // 5. Archive session (best effort cleanup)
+  // 6. Archive session (best effort cleanup)
   try {
     await apiRequest(apiKey, `/sessions/${session.id}`, "DELETE");
   } catch {
@@ -94,14 +98,15 @@ async function streamSessionEvents(apiKey: string, sessionId: string): Promise<s
     Accept: "text/event-stream",
   };
 
-  const res = await fetch(`${API_BASE}/sessions/${sessionId}/events`, {
+  // Use /stream endpoint (not /events which returns history)
+  const res = await fetch(`${API_BASE}/sessions/${sessionId}/stream`, {
     method: "GET",
     headers,
   });
 
   if (!res.ok || !res.body) {
-    const errorText = res.body ? "" : " (no body)";
-    throw new Error(`Failed to stream session events: ${res.status}${errorText}`);
+    const errorText = res.body ? await res.text() : "(no body)";
+    throw new Error(`Failed to open stream: ${res.status} ${errorText}`);
   }
 
   let resultText = "";
@@ -143,6 +148,12 @@ async function streamSessionEvents(apiKey: string, sessionId: string): Promise<s
           }
         }
 
+        // Track tool usage as activity
+        if (event.type === "agent.tool_use") {
+          sawAgentActivity = true;
+          console.log(`[stream] Tool use: ${event.name}`);
+        }
+
         // Mark activity on any agent-related event
         if (event.type?.startsWith("agent.") || event.type?.startsWith("tool.")) {
           sawAgentActivity = true;
@@ -154,7 +165,6 @@ async function streamSessionEvents(apiKey: string, sessionId: string): Promise<s
           return resultText;
         }
 
-        // If idle but no activity yet, the agent hasn't started — keep waiting
         if (event.type === "session.status_idle" && !sawAgentActivity) {
           console.log(`[stream] Ignoring initial idle (no agent activity yet)`);
           continue;
@@ -162,6 +172,11 @@ async function streamSessionEvents(apiKey: string, sessionId: string): Promise<s
 
         if (event.type === "session.status_terminated") {
           throw new Error("Managed Agent session terminated unexpectedly");
+        }
+
+        // Log errors from the session
+        if (event.type === "session.error") {
+          console.error(`[stream] Session error: ${JSON.stringify(event.error)}`);
         }
       } catch (e) {
         if (e instanceof SyntaxError) continue;
