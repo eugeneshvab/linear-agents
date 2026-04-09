@@ -4,7 +4,7 @@ interface ManagedAgentResult {
 }
 
 const API_BASE = "https://api.anthropic.com/v1";
-const BETA_HEADER = "managed-agents-2026-04-01,agent-api-2026-03-01";
+const BETA_HEADER = "managed-agents-2026-04-01";
 
 async function apiRequest(
   apiKey: string,
