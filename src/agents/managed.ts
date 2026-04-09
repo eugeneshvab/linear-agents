@@ -1,6 +1,6 @@
 import type { AgentContext } from "../types.js";
 import { runManagedAgent } from "../shared/managed-agent.js";
-import { postResponse, postError } from "../shared/linear.js";
+import { postResponse, completeSession, postError } from "../shared/linear.js";
 
 export async function handleManagedAgent(
   ctx: AgentContext,
@@ -37,8 +37,14 @@ export async function handleManagedAgent(
     );
 
     console.log(`[managed] Agent completed. Response length: ${result.text.length}, sessionId: ${result.sessionId}`);
-    await postResponse(linearClient, agentSessionId, result.text);
-    console.log(`[managed] Response posted to Linear`);
+    // Post the response if the agent produced text output
+    if (result.text.length > 0) {
+      await postResponse(linearClient, agentSessionId, result.text);
+      console.log(`[managed] Response posted to Linear`);
+    }
+    // Mark the session as complete so Linear stops showing "Analyzing..."
+    await completeSession(linearClient, agentSessionId);
+    console.log(`[managed] Session marked complete`);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error(`[managed] Agent failed for session ${agentSessionId}:`, message);

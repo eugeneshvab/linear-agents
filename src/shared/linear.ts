@@ -60,6 +60,23 @@ export async function postResponse(client: LinearClient, agentSessionId: string,
   console.log(`[linear] Response posted`);
 }
 
+export async function completeSession(client: LinearClient, agentSessionId: string): Promise<void> {
+  console.log(`[linear] Completing session ${agentSessionId}`);
+  await graphql(client, `
+    mutation CompleteSession($id: String!, $input: AgentSessionUpdateInput!) {
+      agentSessionUpdate(id: $id, input: $input) {
+        success
+      }
+    }
+  `, {
+    id: agentSessionId,
+    input: {
+      status: "complete",
+    },
+  });
+  console.log(`[linear] Session completed`);
+}
+
 export async function postError(client: LinearClient, agentSessionId: string, message: string): Promise<void> {
   console.log(`[linear] Posting error to session ${agentSessionId}: ${message}`);
   await graphql(client, `
