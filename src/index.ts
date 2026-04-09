@@ -21,19 +21,36 @@ export default {
       return new Response("Method not allowed", { status: 405 });
     }
 
+    const url = new URL(request.url);
+
+    // Debug endpoint — logs raw payload, no signature check
+    if (url.pathname === "/debug") {
+      const debugBody = await request.text();
+      console.log("[debug] Headers:", JSON.stringify(Object.fromEntries(request.headers.entries())));
+      console.log("[debug] Body:", debugBody);
+      return new Response("OK (debug logged)", { status: 200 });
+    }
+
     const agentName = extractAgentFromPath(request.url);
     if (!agentName) {
       return new Response("Not found", { status: 404 });
     }
 
     const body = await request.text();
+
+    // Log signature info for debugging
     const signature = request.headers.get("linear-signature");
+    console.log(`[worker] Signature present: ${!!signature}, agent: ${agentName}`);
     if (!signature) {
+      console.log("[worker] All headers:", JSON.stringify(Object.fromEntries(request.headers.entries())));
       return new Response("Missing signature", { status: 401 });
     }
 
     const valid = await verifySignature(body, signature, env.LINEAR_WEBHOOK_SECRET);
     if (!valid) {
+      console.log(`[worker] Signature mismatch. Got: ${signature.substring(0, 20)}...`);
+      // Log the payload anyway so we can debug
+      console.log("[worker] Rejected payload:", body.substring(0, 500));
       return new Response("Invalid signature", { status: 401 });
     }
 
