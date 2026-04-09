@@ -11,10 +11,15 @@ async function graphql(client: LinearClient, query: string, variables?: Record<s
     },
     body: JSON.stringify({ query, variables }),
   });
+  const responseText = await res.text();
   if (!res.ok) {
-    throw new Error(`Linear API error: ${res.status} ${await res.text()}`);
+    throw new Error(`Linear API error: ${res.status} ${responseText}`);
   }
-  return res.json();
+  const json = JSON.parse(responseText);
+  if (json.errors) {
+    throw new Error(`Linear GraphQL error: ${JSON.stringify(json.errors)}`);
+  }
+  return json;
 }
 
 export function createLinearClient(accessToken: string): LinearClient {
@@ -22,6 +27,7 @@ export function createLinearClient(accessToken: string): LinearClient {
 }
 
 export async function acknowledgeSession(client: LinearClient, agentSessionId: string): Promise<void> {
+  console.log(`[linear] Acknowledging session ${agentSessionId}`);
   await graphql(client, `
     mutation AcknowledgeAgent($input: AgentActivityCreateInput!) {
       agentActivityCreate(input: $input) {
@@ -31,13 +37,14 @@ export async function acknowledgeSession(client: LinearClient, agentSessionId: s
   `, {
     input: {
       agentSessionId,
-      type: "thought",
-      content: "Analyzing issue...",
+      content: { type: "thought", body: "Analyzing issue..." },
     },
   });
+  console.log(`[linear] Acknowledged`);
 }
 
 export async function postResponse(client: LinearClient, agentSessionId: string, text: string): Promise<void> {
+  console.log(`[linear] Posting response to session ${agentSessionId}, length: ${text.length}`);
   await graphql(client, `
     mutation PostAgentResponse($input: AgentActivityCreateInput!) {
       agentActivityCreate(input: $input) {
@@ -47,13 +54,14 @@ export async function postResponse(client: LinearClient, agentSessionId: string,
   `, {
     input: {
       agentSessionId,
-      type: "response",
-      content: text,
+      content: { type: "response", body: text },
     },
   });
+  console.log(`[linear] Response posted`);
 }
 
 export async function postError(client: LinearClient, agentSessionId: string, message: string): Promise<void> {
+  console.log(`[linear] Posting error to session ${agentSessionId}: ${message}`);
   await graphql(client, `
     mutation PostAgentError($input: AgentActivityCreateInput!) {
       agentActivityCreate(input: $input) {
@@ -63,8 +71,7 @@ export async function postError(client: LinearClient, agentSessionId: string, me
   `, {
     input: {
       agentSessionId,
-      type: "error",
-      content: message,
+      content: { type: "error", body: message },
     },
   });
 }
