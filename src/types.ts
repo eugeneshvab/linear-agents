@@ -1,4 +1,4 @@
-export type AgentName = "planner" | "triager" | "reviewer" | "security" | "story-writer" | "implementer";
+export type AgentName = "planner" | "triager" | "reviewer" | "security" | "story-writer" | "implementer" | "agent-smith";
 
 export interface SessionState {
   anthropicSessionId: string;
@@ -23,6 +23,7 @@ export interface Env {
   SECURITY_AGENT_ID: string;
   STORY_WRITER_AGENT_ID: string;
   IMPLEMENTER_AGENT_ID: string;
+  AGENT_SMITH_AGENT_ID: string;
 
   // Vault IDs for MCP OAuth (Linear + GitHub)
   LINEAR_VAULT_ID: string;

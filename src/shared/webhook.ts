@@ -1,7 +1,7 @@
 import type { AgentName, WebhookPayload } from "../types.js";
 
 const VALID_AGENTS = new Set<string>([
-  "planner", "triager", "reviewer", "security", "story-writer", "implementer",
+  "planner", "triager", "reviewer", "security", "story-writer", "implementer", "agent-smith",
 ]);
 
 export function extractAgentFromPath(url: string): AgentName | null {
