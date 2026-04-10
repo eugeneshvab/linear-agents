@@ -6,6 +6,10 @@ compatibility_date = "2024-01-01"
 binding = "OAUTH_TOKENS"
 id = "4bb06ee7c76447f7b6c688a294500828"
 
+[[kv_namespaces]]
+binding = "AGENT_SESSIONS"
+id = "a47d7849546c4f7b89e7f58c495d776b"
+
 [vars]
 GITHUB_REPO_OWNER = "stowe-io"
 GITHUB_REPO_NAME = "stowe-io"

@@ -1,8 +1,17 @@
 export type AgentName = "planner" | "triager" | "reviewer" | "security" | "story-writer" | "implementer";
 
+export interface SessionState {
+  anthropicSessionId: string;
+  agentName: AgentName;
+  status: "running" | "idle" | "closed";
+  createdAt: number;
+  lastActivityAt: number;
+}
+
 export interface Env {
   // Linear
   OAUTH_TOKENS: KVNamespace;
+  AGENT_SESSIONS: KVNamespace;
   LINEAR_WEBHOOK_SECRET: string;
 
   // Anthropic Managed Agents

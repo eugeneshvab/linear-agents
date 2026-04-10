@@ -1,11 +1,5 @@
 import type { ProgressCallback } from "../types.js";
-
-interface ManagedAgentResult {
-  text: string;
-  sessionId: string;
-}
-
-const PROGRESS_THROTTLE_MS = 10_000;
+import { ProgressTracker } from "./progress-tracker.js";
 
 const API_BASE = "https://api.anthropic.com/v1";
 const BETA_MANAGED = "managed-agents-2026-04-01";
@@ -36,16 +30,12 @@ async function apiRequest(
   return res.json();
 }
 
-export async function runManagedAgent(
+export async function createManagedSession(
   apiKey: string,
   agentId: string,
   environmentId: string,
-  taskMessage: string,
-  githubToken: string,
   vaultIds: string[],
-  onProgress?: ProgressCallback,
-): Promise<ManagedAgentResult> {
-  // 1. Create session
+): Promise<string> {
   const sessionBody: Record<string, unknown> = {
     agent: agentId,
     environment_id: environmentId,
@@ -56,8 +46,16 @@ export async function runManagedAgent(
   console.log(`[anthropic] Creating session for agent ${agentId}`);
   const session = (await apiRequest(apiKey, "/sessions", "POST", sessionBody)) as { id: string; status: string };
   console.log(`[anthropic] Session created: ${session.id}, status: ${session.status}`);
+  return session.id;
+}
 
-  // 2. Build the full message with git clone instructions
+export async function runManagedSession(
+  apiKey: string,
+  sessionId: string,
+  taskMessage: string,
+  githubToken: string,
+  onProgress?: ProgressCallback,
+): Promise<string> {
   const fullMessage = [
     taskMessage,
     "",
@@ -66,13 +64,12 @@ export async function runManagedAgent(
     "Then cd into stowe-io and read AGENTS.md first.",
   ].join("\n");
 
-  // 3. Open the SSE stream FIRST (per docs: stream before sending message)
-  console.log(`[anthropic] Opening SSE stream for session ${session.id}`);
-  const streamPromise = streamSessionEvents(apiKey, session.id, onProgress);
+  console.log(`[anthropic] Opening SSE stream for session ${sessionId}`);
+  const tracker = onProgress ? new ProgressTracker(onProgress) : undefined;
+  const streamPromise = streamSessionEvents(apiKey, sessionId, tracker);
 
-  // 4. Then send the user message — this triggers the agent to start working
   console.log(`[anthropic] Sending user message (${fullMessage.length} chars)`);
-  await apiRequest(apiKey, `/sessions/${session.id}/events`, "POST", {
+  await apiRequest(apiKey, `/sessions/${sessionId}/events`, "POST", {
     events: [
       {
         type: "user.message",
@@ -82,21 +79,51 @@ export async function runManagedAgent(
   });
   console.log(`[anthropic] Message sent, waiting for agent to finish`);
 
-  // 5. Wait for the stream to complete
   const resultText = await streamPromise;
   console.log(`[anthropic] Agent finished, result length: ${resultText.length}`);
+  return resultText;
+}
 
-  // 6. Archive session (best effort cleanup)
+export async function sendFollowUpMessage(
+  apiKey: string,
+  anthropicSessionId: string,
+  message: string,
+  onProgress?: ProgressCallback,
+): Promise<string> {
+  const tracker = onProgress ? new ProgressTracker(onProgress) : undefined;
+
+  // 1. Open fresh SSE stream for this response
+  console.log(`[anthropic] Opening follow-up stream for session ${anthropicSessionId}`);
+  const streamPromise = streamSessionEvents(apiKey, anthropicSessionId, tracker);
+
+  // 2. Interrupt current work + send new message
+  console.log(`[anthropic] Sending interrupt + follow-up message`);
+  await apiRequest(apiKey, `/sessions/${anthropicSessionId}/events`, "POST", {
+    events: [
+      { type: "user.interrupt" },
+      {
+        type: "user.message",
+        content: [{ type: "text", text: message }],
+      },
+    ],
+  });
+
+  // 3. Wait for agent response
+  const resultText = await streamPromise;
+  console.log(`[anthropic] Follow-up complete, result length: ${resultText.length}`);
+  return resultText;
+}
+
+export async function deleteSession(apiKey: string, sessionId: string): Promise<void> {
   try {
-    await apiRequest(apiKey, `/sessions/${session.id}`, "DELETE");
+    await apiRequest(apiKey, `/sessions/${sessionId}`, "DELETE");
+    console.log(`[anthropic] Session ${sessionId} deleted`);
   } catch {
     // Non-critical
   }
-
-  return { text: resultText, sessionId: session.id };
 }
 
-async function streamSessionEvents(apiKey: string, sessionId: string, onProgress?: ProgressCallback): Promise<string> {
+async function streamSessionEvents(apiKey: string, sessionId: string, tracker?: ProgressTracker): Promise<string> {
   const headers: Record<string, string> = {
     "x-api-key": apiKey,
     "anthropic-version": "2023-06-01",
@@ -117,7 +144,6 @@ async function streamSessionEvents(apiKey: string, sessionId: string, onProgress
 
   let resultText = "";
   let sawAgentActivity = false;
-  let lastProgressTime = 0;
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -153,30 +179,17 @@ async function streamSessionEvents(apiKey: string, sessionId: string, onProgress
               resultText += block.text;
             }
           }
-          if (onProgress) {
-            const now = Date.now();
-            if (now - lastProgressTime >= PROGRESS_THROTTLE_MS) {
-              lastProgressTime = now;
-              try { await onProgress("Agent is composing response..."); } catch (e) {
-                console.error(`[stream] Progress post failed:`, e);
-              }
-            }
-          }
         }
 
         // Track tool usage as activity
         if (event.type === "agent.tool_use") {
           sawAgentActivity = true;
           console.log(`[stream] Tool use: ${event.name}`);
-          if (onProgress) {
-            const now = Date.now();
-            if (now - lastProgressTime >= PROGRESS_THROTTLE_MS) {
-              lastProgressTime = now;
-              try { await onProgress(`Using tool: ${event.name}...`); } catch (e) {
-                console.error(`[stream] Progress post failed:`, e);
-              }
-            }
-          }
+        }
+
+        // Post progress via tracker for all relevant events
+        if (tracker) {
+          await tracker.onEvent(event);
         }
 
         // Mark activity on any agent-related event

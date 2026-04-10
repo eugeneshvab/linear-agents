@@ -1,7 +1,7 @@
-import type { Env, AgentName, AgentContext } from "./types.js";
+import type { Env, AgentName, AgentContext, SessionState } from "./types.js";
 import { extractAgentFromPath, verifySignature, parseWebhookPayload } from "./shared/webhook.js";
-import { createLinearClient, acknowledgeSession } from "./shared/linear.js";
-import { handleManagedAgent } from "./agents/managed.js";
+import { createLinearClient, acknowledgeSession, postThought } from "./shared/linear.js";
+import { handleManagedAgent, handleFollowUp } from "./agents/managed.js";
 
 function getAgentId(agentName: AgentName, env: Env): string {
   const map: Record<AgentName, string> = {
@@ -81,9 +81,6 @@ export default {
     await acknowledgeSession(linearClient, parsed.agentSessionId);
     console.log(`[worker] Acknowledged`);
 
-    const managedAgentId = getAgentId(agentName, env);
-    console.log(`[worker] Dispatching to managed agent: ${managedAgentId}`);
-
     const agentCtx: AgentContext = {
       agentSessionId: parsed.agentSessionId,
       promptContext: parsed.promptContext,
@@ -94,8 +91,38 @@ export default {
       env,
     };
 
+    // Check if this is a follow-up to an existing session
+    if (parsed.action === "prompted") {
+      const sessionJson = await env.AGENT_SESSIONS.get(`session:${parsed.agentSessionId}`);
+      if (sessionJson) {
+        const sessionState: SessionState = JSON.parse(sessionJson);
+
+        // Reject concurrent follow-ups — agent is already processing
+        if (sessionState.status === "running") {
+          console.log(`[worker] Session still running, rejecting concurrent follow-up`);
+          await postThought(linearClient, parsed.agentSessionId, "Still processing previous message...");
+          return new Response("OK", { status: 200 });
+        }
+
+        // Mark as running before dispatching to reduce race window
+        await env.AGENT_SESSIONS.put(`session:${parsed.agentSessionId}`, JSON.stringify({
+          ...sessionState,
+          status: "running",
+          lastActivityAt: Date.now(),
+        }), { expirationTtl: 600 });
+
+        console.log(`[worker] Follow-up for existing session, Anthropic ID: ${sessionState.anthropicSessionId}`);
+        executionCtx.waitUntil(handleFollowUp(agentCtx, sessionState));
+        return new Response("OK", { status: 200 });
+      }
+      console.log(`[worker] No active session found for follow-up, creating new session`);
+    }
+
+    const managedAgentId = getAgentId(agentName, env);
+    console.log(`[worker] Dispatching to managed agent: ${managedAgentId}`);
+
     // Dispatch to Managed Agent async — Worker returns 200 immediately
-    executionCtx.waitUntil(handleManagedAgent(agentCtx, managedAgentId));
+    executionCtx.waitUntil(handleManagedAgent(agentCtx, managedAgentId, agentName));
 
     return new Response("OK", { status: 200 });
   },
