@@ -12,6 +12,7 @@ function getAgentId(agentName: AgentName, env: Env): string {
     "story-writer": env.STORY_WRITER_AGENT_ID,
     implementer: env.IMPLEMENTER_AGENT_ID,
     "agent-smith": env.AGENT_SMITH_AGENT_ID,
+    "qa-expert": env.QA_EXPERT_AGENT_ID,
   };
   return map[agentName];
 }

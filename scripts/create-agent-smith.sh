@@ -116,8 +116,8 @@ agent=$(curl -sS --fail-with-body https://api.anthropic.com/v1/agents \
   "system": $SYSTEM_JSON,
   "tools": [
     {"type": "agent_toolset_20260401"},
-    {"type": "mcp_toolset", "mcp_server_name": "linear"},
-    {"type": "mcp_toolset", "mcp_server_name": "github"}
+    {"type": "mcp_toolset", "mcp_server_name": "linear", "default_config": {"permission_policy": {"type": "always_allow"}}},
+    {"type": "mcp_toolset", "mcp_server_name": "github", "default_config": {"permission_policy": {"type": "always_allow"}}}
   ],
   "mcp_servers": [
     {"name": "linear", "type": "url", "url": "https://mcp.linear.app/mcp"},
